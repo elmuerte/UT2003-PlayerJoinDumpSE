@@ -127,12 +127,12 @@ function string LogFilename()
   result = sFileFormat;
   ReplaceText(result, "%P", GetServerPort());
   ReplaceText(result, "%N", Level.Game.GameReplicationInfo.ServerName);
-  ReplaceText(result, "%Y", string(Level.Year));
-  ReplaceText(result, "%M", string(Level.Month));
-  ReplaceText(result, "%D", string(Level.Day));
-  ReplaceText(result, "%H", string(Level.Hour));
-  ReplaceText(result, "%I", string(Level.Minute));
-  ReplaceText(result, "%S", string(Level.Second));
+  ReplaceText(result, "%Y", Right("00"$string(Level.Year), 2));
+  ReplaceText(result, "%M", Right("00"$string(Level.Month), 2));
+  ReplaceText(result, "%D", Right("00"$string(Level.Day), 2));
+  ReplaceText(result, "%H", Right("00"$string(Level.Hour), 2));
+  ReplaceText(result, "%I", Right("00"$string(Level.Minute), 2));
+  ReplaceText(result, "%S", Right("00"$string(Level.Second), 2));
   return sLogDir$result;
 }
 
