@@ -1,21 +1,28 @@
 /////////////////////////////////////////////////////////////////////////////
 // filename:    PlayerJoinDumpSE.uc
-// version:     101
+// version:     102
 // author:      Michiel 'El Muerte' Hendriks <elmuerte@drunksnipers.com>
 // perpose:     dumping player join information in the UT2003 log file
 ///////////////////////////////////////////////////////////////////////////////
 
-class PlayerJoinDumpSE extends Info config;
+class PlayerJoinDumpSE extends info config;
 
-var bool bInitialized;
 var FileLog extlog;
 var string extlogname;
 
-var globalconfig bool bExternalLog;
+var config bool bExternalLog;
+var config string sLogDir;
 
-const VERSION = "101";
+const VERSION = "102";
 
-var string ips[99]; //keep record of max 100 players
+struct PlayerCache
+{
+  var string name;
+  var string ip;
+  var int magic;
+};
+
+var array<PlayerCache> cache;
 
 // Return the server's port number.
 function string GetServerPort()
@@ -26,28 +33,23 @@ function string GetServerPort()
     // Figure out the server's port.
     S = Level.GetAddressURL();
     i = InStr( S, ":" );
-    assert(i>=0);
     return Mid(S,i+1);
 }
 
 function PostBeginPlay()
 {
   local string servaddr;
-	if (!bInitialized)
-    {
-        bInitialized = true;
-        log("[~] Starting PlayerJoinDumpSE version "$VERSION);
-        if (bExternalLog) 
-        {
-          servaddr = GetServerPort();
-          extlogname = "PlayerJoin_"$servaddr$"_"$Level.Year$"_"$Level.Month$"_"$Level.Day$"_"$Level.Hour$"_"$Level.Minute$"_"$Level.Second;
-          extlog = spawn(class 'FileLog');
-          log("[~] Logging player joins to "$extlogname$".txt");
-        }
-        log("[~] Michiel 'El Muerte' Hendriks - elmuerte@drunksnipers.com");
-        log("[~] The Drunk Snipers - http://www.drunksnipers.com");
-        Enable('Tick');
-    }
+	log("[~] Starting PlayerJoinDumpSE version "$VERSION);
+  if (bExternalLog) 
+  {
+    servaddr = GetServerPort();
+    extlogname = sLogDir$"PlayerJoin_"$servaddr$"_"$Level.Year$"_"$Level.Month$"_"$Level.Day$"_"$Level.Hour$"_"$Level.Minute$"_"$Level.Second;
+    extlog = spawn(class'FileLog');
+    log("[~] Logging player joins to "$extlogname$".txt");
+  }
+  log("[~] Michiel 'El Muerte' Hendriks - elmuerte@drunksnipers.com");
+  log("[~] The Drunk Snipers - http://www.drunksnipers.com");
+  Enable('Tick');
 }
 
 function Tick(float DeltaTime)
@@ -57,36 +59,65 @@ function Tick(float DeltaTime)
 
 function CheckPlayerList()
 {
-  local int pLoc;
+  local int pLoc, magicint;
   local string ipstr;
-  local string logline;
-  local controller C;
+  local PlayerController PC;
 
-  for( C=Level.ControllerList; C!=None; C=C.nextController )
+  if (Level.Game.CurrentID > cache.length) cache.length = Level.Game.CurrentID; // make cache larger
+  magicint = Rand(MaxInt);
+    
+	ForEach DynamicActors(class'PlayerController', PC)
   {
-		if( C.IsA('PlayerController') )
-		{
-			pLoc = C.PlayerReplicationInfo.PlayerID;
-      ipstr = PlayerController(C).GetPlayerNetworkAddress();
-      if ((ips[pLoc] != ipstr) && (ipstr != "") && (!C.PlayerReplicationInfo.bIsSpectator))
+    pLoc = PC.PlayerReplicationInfo.PlayerID;
+    ipstr = PC.GetPlayerNetworkAddress();
+    if (ipstr != "")
+    {
+      if (cache[pLoc].ip != ipstr)
       {
-        ips[pLoc] = ipstr;
-        logline = "[PLAYER_JOIN] "$Level.Year$"/"$Level.Month$"/"$Level.Day$" "$Level.Hour$":"$Level.Minute$":"$Level.Second$" "$C.PlayerReplicationInfo.PlayerName$" "$ipstr$" "$PlayerController(C).Player.CurrentNetSpeed;
-        if (bExternalLog) 
-        {
-          // I can't find a way to close the log at the end of the game, so I use this "work around"
-          // if the log isn't closed at the end, nothing is saved :(
-          extlog.OpenLog(extlogname);
-          extlog.Logf(logline);
-          extlog.CloseLog();
-        }
-        else log(logline);
+        cache[pLoc].ip = ipstr;
+        cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
+        LogLine("[PLAYER_JOIN]"@Timestamp()$chr(9)$PC.PlayerReplicationInfo.PlayerName$chr(9)$ipstr$chr(9)$PC.Player.CurrentNetSpeed$chr(9)$PC.GetPlayerIDHash());
       }
-		}
+      else if (cache[pLoc].name != PC.PlayerReplicationInfo.PlayerName)
+      {
+        LogLine("[PLAYER_NAME_CHANGE]"@Timestamp()$chr(9)$cache[pLoc].name$chr(9)$PC.PlayerReplicationInfo.PlayerName);
+        cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
+      }
+      cache[pLoc].magic = magicint;
+    }
   }
+
+  // check parts
+  for (pLoc = 0; pLoc < cache.length; pLoc++)
+  {
+    if ((cache[pLoc].magic != magicint) && (cache[pLoc].magic > -1) && (cache[pLoc].ip != ""))
+    {
+      cache[pLoc].magic = -1;
+      LogLine("[PLAYER_PART]"@Timestamp()$chr(9)$cache[pLoc].name);
+    }
+  }
+}
+
+function LogLine(string logline)
+{
+  if (bExternalLog) 
+  {
+    // I can't find a way to close the log at the end of the game, so I use this "work around"
+    // if the log isn't closed at the end, nothing is saved :(
+    extlog.OpenLog(extlogname);
+    extlog.Logf(logline);
+    extlog.CloseLog();
+  }
+  else log(logline, 'PlayerJoinDumpSE');
+}
+
+function string Timestamp()
+{
+  return Level.Year$"/"$Level.Month$"/"$Level.Day$" "$Level.Hour$":"$Level.Minute$":"$Level.Second;
 }
 
 defaultproperties 
 {
   bExternalLog=false
+  sLogDir=""
 }
