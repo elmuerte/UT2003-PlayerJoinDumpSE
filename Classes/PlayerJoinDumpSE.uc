@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 // filename:    PlayerJoinDumpSE.uc
-// version:     102
+// version:     103
 // author:      Michiel 'El Muerte' Hendriks <elmuerte@drunksnipers.com>
 // perpose:     dumping player join information in the UT2003 log file
 ///////////////////////////////////////////////////////////////////////////////
@@ -12,8 +12,9 @@ var string extlogname;
 
 var config bool bExternalLog;
 var config string sLogDir;
+var config string sFileFormat;
 
-const VERSION = "102";
+const VERSION = "103";
 
 struct PlayerCache
 {
@@ -24,26 +25,30 @@ struct PlayerCache
 
 var array<PlayerCache> cache;
 
-// Return the server's port number.
 function string GetServerPort()
 {
     local string S;
     local int i;
-
-    // Figure out the server's port.
     S = Level.GetAddressURL();
     i = InStr( S, ":" );
     return Mid(S,i+1);
 }
 
+function string GetServerIP()
+{
+    local string S;
+    local int i;
+    S = Level.GetAddressURL();
+    i = InStr( S, ":" );
+    return Left(S,i);
+}
+
 function PostBeginPlay()
 {
-  local string servaddr;
 	log("[~] Starting PlayerJoinDumpSE version "$VERSION);
   if (bExternalLog) 
   {
-    servaddr = GetServerPort();
-    extlogname = sLogDir$"PlayerJoin_"$servaddr$"_"$Level.Year$"_"$Level.Month$"_"$Level.Day$"_"$Level.Hour$"_"$Level.Minute$"_"$Level.Second;
+    extlogname = LogFilename();
     extlog = spawn(class'FileLog');
     log("[~] Logging player joins to "$extlogname$".txt");
   }
@@ -116,8 +121,24 @@ function string Timestamp()
   return Level.Year$"/"$Level.Month$"/"$Level.Day$" "$Level.Hour$":"$Level.Minute$":"$Level.Second;
 }
 
+function string LogFilename()
+{
+  local string result;
+  result = sFileFormat;
+  ReplaceText(result, "%P", GetServerPort());
+  ReplaceText(result, "%N", Level.Game.GameReplicationInfo.ServerName);
+  ReplaceText(result, "%Y", string(Level.Year));
+  ReplaceText(result, "%M", string(Level.Month));
+  ReplaceText(result, "%D", string(Level.Day));
+  ReplaceText(result, "%H", string(Level.Hour));
+  ReplaceText(result, "%I", string(Level.Minute));
+  ReplaceText(result, "%S", string(Level.Second));
+  return sLogDir$result;
+}
+
 defaultproperties 
 {
   bExternalLog=false
   sLogDir=""
+  sFileFormat="PlayerJoin_%P_%Y_%M_%D_%H_%I_%S"
 }
