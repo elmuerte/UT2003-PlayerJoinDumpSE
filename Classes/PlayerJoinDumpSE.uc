@@ -1,9 +1,11 @@
 /////////////////////////////////////////////////////////////////////////////
 // filename:    PlayerJoinDumpSE.uc
-// version:     103
+// version:     104
 // author:      Michiel 'El Muerte' Hendriks <elmuerte@drunksnipers.com>
 // perpose:     dumping player join information in the UT2003 log file
 ///////////////////////////////////////////////////////////////////////////////
+
+// TODO: fix bug
 
 class PlayerJoinDumpSE extends info config;
 
@@ -14,7 +16,9 @@ var config bool bExternalLog;
 var config string sLogDir;
 var config string sFileFormat;
 
-const VERSION = "103";
+var bool bScanning;
+
+const VERSION = "104";
 
 struct PlayerCache
 {
@@ -59,7 +63,7 @@ function PostBeginPlay()
 
 function Tick(float DeltaTime)
 {   
-    CheckPlayerList();
+    if (!bScanning) CheckPlayerList();
 }
 
 function CheckPlayerList()
@@ -68,27 +72,32 @@ function CheckPlayerList()
   local string ipstr;
   local PlayerController PC;
 
-  if (Level.Game.CurrentID > cache.length) cache.length = Level.Game.CurrentID; // make cache larger
+  bScanning = true;
+
+  if (Level.Game.CurrentID > cache.length) cache.length = Level.Game.CurrentID+1; // make cache larger
   magicint = Rand(MaxInt);
     
 	ForEach DynamicActors(class'PlayerController', PC)
   {
-    pLoc = PC.PlayerReplicationInfo.PlayerID;
-    ipstr = PC.GetPlayerNetworkAddress();
-    if (ipstr != "")
+    if (!PC.PlayerReplicationInfo.bBot && !PC.PlayerReplicationInfo.bOnlySpectator)
     {
-      if (cache[pLoc].ip != ipstr)
+      pLoc = PC.PlayerReplicationInfo.PlayerID;
+      ipstr = PC.GetPlayerNetworkAddress();
+      if (ipstr != "")
       {
-        cache[pLoc].ip = ipstr;
-        cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
-        LogLine("[PLAYER_JOIN]"@Timestamp()$chr(9)$PC.PlayerReplicationInfo.PlayerName$chr(9)$ipstr$chr(9)$PC.Player.CurrentNetSpeed$chr(9)$PC.GetPlayerIDHash());
+        if (cache[pLoc].ip != ipstr)
+        {
+          cache[pLoc].ip = ipstr;
+          cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
+          LogLine("[PLAYER_JOIN]"@Timestamp()$chr(9)$PC.PlayerReplicationInfo.PlayerName$chr(9)$ipstr$chr(9)$PC.Player.CurrentNetSpeed$chr(9)$PC.GetPlayerIDHash());
+        }
+        else if (cache[pLoc].name != PC.PlayerReplicationInfo.PlayerName)
+        {
+          LogLine("[PLAYER_NAME_CHANGE]"@Timestamp()$chr(9)$cache[pLoc].name$chr(9)$PC.PlayerReplicationInfo.PlayerName);
+          cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
+        }
+        cache[pLoc].magic = magicint;
       }
-      else if (cache[pLoc].name != PC.PlayerReplicationInfo.PlayerName)
-      {
-        LogLine("[PLAYER_NAME_CHANGE]"@Timestamp()$chr(9)$cache[pLoc].name$chr(9)$PC.PlayerReplicationInfo.PlayerName);
-        cache[pLoc].name = PC.PlayerReplicationInfo.PlayerName;
-      }
-      cache[pLoc].magic = magicint;
     }
   }
 
@@ -101,6 +110,7 @@ function CheckPlayerList()
       LogLine("[PLAYER_PART]"@Timestamp()$chr(9)$cache[pLoc].name);
     }
   }
+  bScanning = false;
 }
 
 function LogLine(string logline)
@@ -127,17 +137,19 @@ function string LogFilename()
   result = sFileFormat;
   ReplaceText(result, "%P", GetServerPort());
   ReplaceText(result, "%N", Level.Game.GameReplicationInfo.ServerName);
-  ReplaceText(result, "%Y", Right("00"$string(Level.Year), 2));
+  ReplaceText(result, "%Y", Right("0000"$string(Level.Year), 4));
   ReplaceText(result, "%M", Right("00"$string(Level.Month), 2));
   ReplaceText(result, "%D", Right("00"$string(Level.Day), 2));
   ReplaceText(result, "%H", Right("00"$string(Level.Hour), 2));
   ReplaceText(result, "%I", Right("00"$string(Level.Minute), 2));
+  ReplaceText(result, "%W", Right("0"$string(Level.DayOfWeek), 1));
   ReplaceText(result, "%S", Right("00"$string(Level.Second), 2));
   return sLogDir$result;
 }
 
 defaultproperties 
 {
+  bScanning=false
   bExternalLog=false
   sLogDir=""
   sFileFormat="PlayerJoin_%P_%Y_%M_%D_%H_%I_%S"
