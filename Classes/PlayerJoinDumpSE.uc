@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 // filename:    PlayerJoinDumpSE.uc
-// version:     104
+// version:     105
 // author:      Michiel 'El Muerte' Hendriks <elmuerte@drunksnipers.com>
 // perpose:     dumping player join information in the UT2003 log file
 ///////////////////////////////////////////////////////////////////////////////
@@ -18,7 +18,7 @@ var config string sFileFormat;
 
 var bool bScanning;
 
-const VERSION = "104";
+const VERSION = "105";
 
 struct PlayerCache
 {
